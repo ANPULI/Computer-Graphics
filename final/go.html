@@ -1,0 +1,360 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <title>Final Project: Go</title>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <style>
+        body {
+            font-family: Monospace;
+            background-color: #101010;
+            color: #fff;
+            margin: 0px;
+            overflow: hidden;
+        }
+
+        a {
+            color: #48f;
+        }
+    </style>
+</head>
+
+<body>
+
+    <script src="three.js"></script>
+    <script src="js/vr/WebVR.js"></script>
+
+    <script src="js/geometries/BoxLineGeometry.js"></script>
+    <script src="js/objects/Lensflare.js"></script>
+
+    <script>
+        var container;
+        var camera, scene, renderer;
+        var controller1, controller2;
+        var raycaster, INTERSECTED;
+
+        var room;
+        var crosshair;
+        var objects = [];
+
+        var count = 0;
+        var radius = 0.16;
+        var normal = new THREE.Vector3();
+        var relativeVelocity = new THREE.Vector3();
+
+        var clock = new THREE.Clock();
+
+        var isMouseDown, isTouch;
+        init();
+        animate();
+
+        function init() {
+
+            alert("To use:\n 1) open this on your smartphone \n"
+                + " 2) enable vr in " + "chrome://flags/" + "\n"
+                + " 3) click \"enter vr\" \n"
+                + " 4) wear your vr glasses\n"
+                + " 5) put a piece down by staring at it\n"
+                + " 6) enjoy!");
+
+            container = document.createElement('div');
+            document.body.appendChild(container);
+
+            var info = document.createElement('div');
+            info.style.position = 'absolute';
+            info.style.top = '10px';
+            info.style.width = '100%';
+            info.style.textAlign = 'center';
+            info.innerHTML =
+                'webvr - go powered by <a href="https://threejs.org" target="_blank" rel="noopener">three.js</a> ';
+            container.appendChild(info);
+
+            // set up the miklway backgroung
+            background = new THREE.CubeTextureLoader().setPath("textures/milkway/")
+                .load([ 'dark-s_px.jpg', 'dark-s_nx.jpg', 'dark-s_py.jpg', 'dark-s_ny.jpg', 'dark-s_pz.jpg', 'dark-s_nz.jpg' ]);
+            background.format = THREE.RGBFormat;
+            scene = new THREE.Scene();
+            scene.background = background;
+
+            // set up the camera
+            camera = new THREE.PerspectiveCamera(70, window.innerWidth / window.innerHeight, 0.1, 100);
+            crosshair = new THREE.Mesh(
+                new THREE.RingBufferGeometry(0.02, 0.04, 32),
+                new THREE.MeshBasicMaterial({
+                    color: 0xffffff,
+                    opacity: 0.5,
+                    transparent: true
+                })
+            );
+            crosshair.position.z = -2;
+            camera.add(crosshair);
+            scene.add(camera);
+
+            // set up the game board
+            room = new THREE.LineSegments(
+                new THREE.BoxLineGeometry(6, 6, 6, 10, 10, 10),
+                new THREE.LineBasicMaterial({
+                    color: 0x808080
+                })
+            );
+            room.geometry.translate(0, 3, 0);
+            scene.add(room);
+
+            // lensflare
+            var loader = new THREE.TextureLoader();
+            var texture0 = loader.load( "textures/lensflare/lensflare0.png" );
+            var texture3 = loader.load( "textures/lensflare/lensflare1.png" );
+            var lensflare = new THREE.Lensflare();
+            lensflare.position.set( -2.9, 5.9, -5.9 );
+            lensflare.addElement( new THREE.LensflareElement( texture0, 700, 0 ) );
+            lensflare.addElement( new THREE.LensflareElement( texture3, 60, 0.6 ) );
+            lensflare.addElement( new THREE.LensflareElement( texture3, 70, 0.7 ) );
+            lensflare.addElement( new THREE.LensflareElement( texture3, 120, 0.9 ) );
+            lensflare.addElement( new THREE.LensflareElement( texture3, 70, 1 ) );
+            scene.add( lensflare );
+
+            var light = new THREE.HemisphereLight(0xffffff, 0x444444);
+            // var light = new THREE.DirectionalLight( 0x8800ff );
+            light.position.set(1, 1, 1);
+            scene.add(light);
+
+            // add the pieces
+            var geometry = new THREE.IcosahedronBufferGeometry(radius, 2);
+            var material = new THREE.MeshStandardMaterial( { roughness: 0.01, metalness: 0.2 } )
+
+            for (var i = 0; i < 11; i++) {
+                for (var j = 0; j < 11; j++) {
+                    for (var k = 0; k < 11; k++) {
+                        if ((k != 10 && k != 0) && (i != 10 && i != 0) && (j != 10 && j != 0)) {
+                            // console.log("inside", i, j, k)
+                            continue;
+                        }
+                        var object = new THREE.Mesh(geometry, new THREE.MeshLambertMaterial({
+                            // color: Math.random() * 0xffffff
+                            color: 0xffffff
+                        }));
+                        // var object = new THREE.Mesh(geometry, material);
+                        object.material.visible = false;
+                        // object.castShadow = true;
+                        // object.receiveShadow = true;
+
+
+                        object.position.x = 0.6*j - 3;
+                        object.position.y = 0.6*i;
+                        // object.position.z = Math.random() * 4 - 2;
+                        object.position.z = 0.6*k - 3;
+                        scene.add(object);
+                        objects.push(object);
+                    }
+                }
+            }
+            //
+
+            renderer = new THREE.WebGLRenderer({
+                antialias: true
+            });
+            renderer.setPixelRatio(window.devicePixelRatio);
+            renderer.setSize(window.innerWidth, window.innerHeight);
+            renderer.vr.enabled = true;
+            container.appendChild(renderer.domElement);
+
+            // potential support for interaction
+            // renderer.domElement.addEventListener('mousedown', onMouseDown, false);
+            // renderer.domElement.addEventListener('mouseup', onMouseUp, false);
+            // renderer.domElement.addEventListener('touchstart', onMouseDown, false);
+            // renderer.domElement.addEventListener('touchend', onMouseUp, false);
+            document.body.appendChild(WEBVR.createButton(renderer));
+
+
+            raycaster = new THREE.Raycaster();
+
+            // potential support for controllers
+/*
+            function onSelectStart() {
+
+                this.userData.isSelecting = true;
+                console.log("SelectStart");
+
+            }
+
+            function onSelectEnd() {
+
+                this.userData.isSelecting = false;
+
+            }
+            
+            controller1 = renderer.vr.getController(0);
+            controller1.addEventListener('selectstart', onSelectStart);
+            controller1.addEventListener('selectend', onSelectEnd);
+            scene.add(controller1);
+
+            controller2 = renderer.vr.getController(1);
+            controller2.addEventListener('selectstart', onSelectStart);
+            controller2.addEventListener('selectend', onSelectEnd);
+            scene.add(controller2);
+
+            // helpers
+
+            var geometry = new THREE.BufferGeometry();
+            geometry.addAttribute('position', new THREE.Float32BufferAttribute([0, 0, 0, 0, 0, -1], 3));
+            geometry.addAttribute('color', new THREE.Float32BufferAttribute([0.5, 0.5, 0.5, 0, 0, 0], 3));
+
+            var material = new THREE.LineBasicMaterial({
+                vertexColors: true,
+                blending: THREE.AdditiveBlending
+            });
+
+            controller1.add(new THREE.Line(geometry, material));
+            controller2.add(new THREE.Line(geometry, material));
+*/
+            //
+
+            window.addEventListener('resize', onWindowResize, false);
+
+            // document.addEventListener("touchstart", onTouchStart, false);
+            // document.addEventListener("touchend", onTouchEnd, false);
+        }
+/*
+        function onTouchStart() {
+            isTouch = true;
+        }
+
+        function onTouchEnd() {
+            isTouch = false;
+        }
+*/
+
+        // failed attempt to control using touch and mouse
+/*
+        function handleTouch() {
+            if (isTouch) {
+                console.log("handle touch");
+            }
+        }
+
+        function onMouseDown() {
+
+            isMouseDown = true;
+
+        }
+
+        function onMouseUp() {
+
+            isMouseDown = false;
+
+        }
+*/
+
+        function onWindowResize() {
+
+            camera.aspect = window.innerWidth / window.innerHeight;
+            camera.updateProjectionMatrix();
+
+            renderer.setSize(window.innerWidth, window.innerHeight);
+
+        }
+
+        // potential support for controllers
+        /* 
+        function handleController(controller) {
+
+            if (controller.userData.isSelecting) {
+
+                var object = room.children[count++];
+
+                object.position.copy(controller.position);
+                object.userData.velocity.x = (Math.random() - 0.5) * 3;
+                object.userData.velocity.y = (Math.random() - 0.5) * 3;
+                object.userData.velocity.z = (Math.random() - 9);
+                object.userData.velocity.applyQuaternion(controller.quaternion);
+
+                if (count === room.children.length) count = 0;
+
+            }
+
+        }
+        */
+
+        //
+
+        function animate() {
+
+            renderer.setAnimationLoop(render);
+
+        }
+
+        var times = 0;
+        var pieceBlack = true;
+
+        function render() {
+/*
+            if (isMouseDown) {
+                console.log("Mouse down")
+            }
+            handleTouch();
+
+            handleController(controller1);
+            handleController(controller2);
+*/
+
+            // find intersections
+            raycaster.setFromCamera({
+                x: 0,
+                y: 0
+            }, camera);
+
+            var intersects = raycaster.intersectObjects(objects);
+
+            if (intersects.length > 0) {
+
+                // if (pieceBlack) INTERSECTED.material.color.setHex(0x444444);
+
+                if (INTERSECTED != intersects[0].object) {
+                    if (INTERSECTED) INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
+                    INTERSECTED = intersects[0].object;
+                    if (pieceBlack) {
+                        INTERSECTED.material.color.setHex(0x444444);
+                    } else {
+                        INTERSECTED.material.color.setHex(0xffffff);
+                    }
+                    INTERSECTED.currentHex = INTERSECTED.material.emissive.getHex();
+                    INTERSECTED.material.emissive.setHex(0x440000);
+                    INTERSECTED.material.visible = true;
+                    times = 0;
+                } else {
+                    // INTERSECTED.material.emissive.setHex(0x4286f4);
+                    // console.log(times++)
+                    if (times++ > 100) {
+                        // INTERSECTED.material.visible = true;
+                        // var object = INTERSECTED;
+                        // scene.add(object);
+                        // scene.children[scene.children.length-1].material.visible = true;
+                        pieceIndex = scene.children.indexOf(INTERSECTED);
+                        scene.children[pieceIndex].material.visible = true;
+                        if (pieceBlack) scene.children[pieceIndex].material.color.setHex(0x444444);
+                    if (pieceBlack) INTERSECTED.material.color.setHex(0x444444);
+                        pieceBlack = ! pieceBlack;
+                        scene.children[pieceIndex].material.emissive.setHex(0x000000);
+                        objects.splice(objects.indexOf(INTERSECTED), 1);
+                        INTERSECTED = null;
+                        times = 0;
+
+                    }
+                }
+            } else {
+                if (INTERSECTED) {
+                    INTERSECTED.material.emissive.setHex(INTERSECTED.currentHex);
+                    INTERSECTED.material.visible = false;
+                }
+                INTERSECTED = undefined;
+                times = 0;
+            }
+
+            renderer.render(scene, camera);
+
+        }
+    </script>
+</body>
+
+</html>
